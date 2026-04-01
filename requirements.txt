@@ -1,0 +1,11 @@
+asyncpg
+pydantic
+sqlalchemy
+python-dotenv
+fastapi
+fastapi-cors
+uvicorn
+gunicorn
+httptools
+numpy==1.26.4
+scikit-learn==1.3.2

@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CropSense · Clasificador de Cultivos</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,700;0,900;1,400&family=Karla:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+  <style>
+    :root {
+      --cream: #F7F2E8;
+      --parchment: #EDE5D0;
+      --sand: #D9CEBC;
+      --forest: #2A4A1E;
+      --moss: #4A7A35;
+      --sage: #8AAF72;
+      --terra: #C05C2A;
+      --amber: #D4923A;
+      --gold: #E8B84B;
+      --ink: #1C2B14;
+      --muted: #7A7060;
+      --border: rgba(42, 74, 30, 0.15);
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--cream);
+      color: var(--ink);
+      font-family: 'Karla', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .layout {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      grid-row: 1 / 3;
+      background: var(--forest);
+      padding: 48px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 40px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .logo-area {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 32px;
+    }
+
+    .logo-eyebrow {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--sage);
+      margin-bottom: 12px;
+    }
+
+    .logo-name {
+      font-family: 'Fraunces', serif;
+      font-size: 2.4rem;
+      font-weight: 900;
+      color: #fff;
+      line-height: 1;
+    }
+
+    .logo-name em {
+      font-style: italic;
+      color: var(--gold);
+    }
+
+    .logo-tagline {
+      margin-top: 10px;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.45);
+      line-height: 1.6;
+    }
+
+    .sidebar-section-title {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--sage);
+      margin-bottom: 14px;
+    }
+
+    .model-card {
+      cursor: pointer;
+      border: 1.5px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 10px;
+      transition: all 0.25s ease;
+      background: rgba(255, 255, 255, 0.04);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .model-card::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--amber);
+      transform: scaleY(0);
+      transform-origin: bottom;
+      transition: transform 0.25s ease;
+      border-radius: 0 2px 2px 0;
+    }
+
+    .model-card.active {
+      border-color: var(--amber);
+      background: rgba(212, 146, 58, 0.12);
+    }
+
+    .model-card.active::after {
+      transform: scaleY(1);
+    }
+
+    .model-card input[type="radio"] {
+      display: none;
+    }
+
+    .model-card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+
+    .model-icon {
+      font-size: 18px;
+      width: 32px;
+      height: 32px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .model-name {
+      font-weight: 600;
+      font-size: 14px;
+      color: #fff;
+    }
+
+    .model-tag {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    .sidebar-decor {
+      margin-top: auto;
+      opacity: 0.1;
+    }
+
+    /* ── MAIN HEADER ── */
+    .main-header {
+      padding: 52px 60px 36px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .step-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--parchment);
+      border: 1px solid var(--sand);
+      border-radius: 100px;
+      padding: 4px 12px;
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    /* .status-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--moss);
+      border-radius: 50%;
+      animation: breathe 3s ease-in-out infinite;
+    } */
+
+    @keyframes breathe {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 0.4;
+        transform: scale(0.7);
+      }
+    }
+
+    .main-title {
+      font-family: 'Fraunces', serif;
+      font-size: clamp(2rem, 3.5vw, 3.2rem);
+      font-weight: 900;
+      line-height: 1.05;
+      color: var(--ink);
+      letter-spacing: -1.5px;
+    }
+
+    .main-title span {
+      color: var(--terra);
+      font-style: italic;
+    }
+
+    .main-subtitle {
+      margin-top: 12px;
+      font-size: 15px;
+      color: var(--muted);
+      max-width: 480px;
+      line-height: 1.6;
+    }
+
+    /* ── MAIN CONTENT ── */
+    .main-content {
+      padding: 48px 60px 80px;
+    }
+
+    .section-heading {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .section-number {
+      font-family: 'Fraunces', serif;
+      font-size: 3.5rem;
+      font-weight: 900;
+      color: var(--parchment);
+      line-height: 1;
+      user-select: none;
+    }
+
+    .section-title {
+      font-family: 'Fraunces', serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    /* ── FEATURES GRID ── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 52px;
+    }
+
+    .field {
+      background: #fff;
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px 14px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .field:focus-within {
+      border-color: var(--moss);
+      box-shadow: 0 0 0 3px rgba(74, 122, 53, 0.1);
+    }
+
+    .field label {
+      display: block;
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .feat-num {
+      display: inline-block;
+      background: var(--parchment);
+      color: var(--terra);
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      margin-right: 6px;
+    }
+
+    .field input {
+      width: 100%;
+      border: none;
+      outline: none;
+      background: transparent;
+      font-family: 'Fraunces', serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--ink);
+      -moz-appearance: textfield;
+    }
+
+    .field input::-webkit-outer-spin-button,
+    .field input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+    }
+
+    .field input::placeholder {
+      color: var(--sand);
+      font-weight: 400;
+      font-style: italic;
+    }
+
+    /* ── PREDICT BUTTON ── */
+    .predict-row {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+
+    .btn-predict {
+      cursor: pointer;
+      border: none;
+      background: var(--forest);
+      color: #fff;
+      font-family: 'Fraunces', serif;
+      font-size: 1rem;
+      font-weight: 700;
+      padding: 18px 40px;
+      border-radius: 100px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 4px 20px rgba(42, 74, 30, 0.25);
+    }
+
+    .btn-predict:hover {
+      background: var(--moss);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(42, 74, 30, 0.3);
+    }
+
+    .btn-predict:active {
+      transform: translateY(0);
+    }
+
+    .btn-predict:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-arrow {
+      width: 28px;
+      height: 28px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      transition: transform 0.2s;
+    }
+
+    .btn-predict:hover .btn-arrow {
+      transform: translateX(3px);
+    }
+
+    .spinner-ring {
+      display: none;
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.25);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .predict-hint {
+      font-size: 12px;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* ── RESULT PANEL ── */
+    #result-panel {
+      display: none;
+      border-radius: 20px;
+      padding: 36px 40px;
+      animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    #result-panel.success {
+      background: linear-gradient(135deg, #EDF7E5 0%, #F5F9F0 100%);
+      border: 1.5px solid rgba(74, 122, 53, 0.3);
+    }
+
+    #result-panel.error {
+      background: linear-gradient(135deg, #FDF0E8 0%, #FDF5F0 100%);
+      border: 1.5px solid rgba(192, 92, 42, 0.3);
+    }
+
+    .result-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .result-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .result-class {
+      font-family: 'Fraunces', serif;
+      font-size: clamp(2rem, 3.5vw, 3rem);
+      font-weight: 900;
+      letter-spacing: -1px;
+      line-height: 1;
+    }
+
+    #result-panel.success .result-class {
+      color: var(--forest);
+    }
+
+    #result-panel.error .result-class {
+      color: var(--terra);
+    }
+
+    .result-badge {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      flex-shrink: 0;
+    }
+
+    #result-panel.success .result-badge {
+      background: rgba(74, 122, 53, 0.12);
+    }
+
+    #result-panel.error .result-badge {
+      background: rgba(192, 92, 42, 0.12);
+    }
+
+    .result-meta {
+      margin-top: 18px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .meta-chip {
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 5px 14px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .meta-chip strong {
+      color: var(--ink);
+    }
+
+    .confidence-bar-wrap {
+      margin-top: 20px;
+    }
+
+    .confidence-bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .confidence-bar {
+      height: 6px;
+      background: rgba(0, 0, 0, 0.07);
+      border-radius: 100px;
+      overflow: hidden;
+    }
+
+    .confidence-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--moss), var(--gold));
+      border-radius: 100px;
+      width: 0%;
+      transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 1024px) {
+      .layout {
+        grid-template-columns: 260px 1fr;
+      }
+
+      .main-header,
+      .main-content {
+        padding-left: 40px;
+        padding-right: 40px;
+      }
+
+      .features-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+        height: auto;
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: 28px 24px;
+        gap: 24px;
+      }
+
+      .logo-area {
+        border-bottom: none;
+        padding-bottom: 0;
+        min-width: 180px;
+      }
+
+      .sidebar-decor {
+        display: none;
+      }
+
+      .main-header,
+      .main-content {
+        padding: 28px 24px;
+      }
+
+      .features-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .section-number {
+        font-size: 2.5rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .result-top {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="logo-area">
+        <p class="logo-eyebrow">Sistema de predicción</p>
+        <h1 class="logo-name">Crop<em>Sense</em></h1>
+        <p class="logo-tagline">Clasificación inteligente de cultivos con modelos de aprendizaje automático.</p>
+      </div>
+
+      <div>
+        <p class="sidebar-section-title">Modelo de predicción</p>
+
+        <label class="model-card active" id="btn-svm">
+          <input type="radio" name="model" value="svm" checked />
+          <div class="model-card-header">
+            <div class="model-icon">⚡</div>
+            <div>
+              <div class="model-name">SVM</div>
+              <div class="model-tag">Kernel RBF</div>
+            </div>
+          </div>
+        </label>
+
+        <label class="model-card" id="btn-rf">
+          <input type="radio" name="model" value="random_forest" />
+          <div class="model-card-header">
+            <div class="model-icon">🌲</div>
+            <div>
+              <div class="model-name">Random Forest</div>
+              <div class="model-tag">Ensemble · 100 trees</div>
+            </div>
+          </div>
+        </label>
+      </div>
+
+      <div class="sidebar-decor">
+        <svg width="180" height="180" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M100 190 C100 190 30 150 30 90 C30 50 60 20 100 20 C140 20 170 50 170 90 C170 150 100 190 100 190Z"
+            stroke="white" stroke-width="1.5" fill="none" />
+          <path d="M100 190 L100 80" stroke="white" stroke-width="1.5" />
+          <path d="M100 130 C100 130 60 110 50 80" stroke="white" stroke-width="1" stroke-dasharray="3 4" />
+          <path d="M100 110 C100 110 140 95 150 65" stroke="white" stroke-width="1" stroke-dasharray="3 4" />
+          <circle cx="100" cy="20" r="4" fill="white" />
+          <circle cx="30" cy="90" r="3" fill="white" opacity="0.5" />
+          <circle cx="170" cy="90" r="3" fill="white" opacity="0.5" />
+        </svg>
+      </div>
+    </aside>
+
+    <!-- MAIN HEADER -->
+    <header class="main-header">
+      <h2 class="main-title">Predicción de<br><span>Cultivo Óptimo</span></h2>
+      <p class="main-subtitle">Ingresa los parámetros del suelo y clima para identificar el cultivo con mayor
+        probabilidad de éxito.</p>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+
+      <div class="section-heading">
+        <div class="section-number">01</div>
+        <div>
+          <div class="section-title">Parámetros del análisis</div>
+        </div>
+      </div>
+
+      <div class="features-grid" id="features-grid"></div>
+
+      <div class="section-heading">
+        <div class="section-number">02</div>
+        <div>
+          <div class="section-title">Ejecutar predicción</div>
+        </div>
+      </div>
+
+      <div class="predict-row">
+        <button class="btn-predict" id="btn-predict">
+          <div class="spinner-ring" id="spinner"></div>
+          <span id="btn-label">Analizar cultivo</span>
+          <div class="btn-arrow">→</div>
+        </button>
+        <p class="predict-hint">Todos los campos son requeridos.</p>
+      </div>
+
+      <div id="result-panel">
+        <div class="result-top">
+          <div>
+            <p class="result-label">Cultivo recomendado</p>
+            <p class="result-class" id="result-class">—</p>
+          </div>
+          <div class="result-badge" id="result-badge">🌿</div>
+        </div>
+        <div class="result-meta" id="result-meta"></div>
+        <div class="confidence-bar-wrap" id="conf-wrap" style="display:none">
+          <div class="confidence-bar-label">
+            <span>Confianza del modelo</span>
+            <span id="conf-pct">—</span>
+          </div>
+          <div class="confidence-bar">
+            <div class="confidence-fill" id="conf-fill"></div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    const API_URL = 'http://localhost:8000';
+
+    const CROP_LABELS = {
+      0: 'Manzana', 1: 'Plátano', 2: 'Frijol negro', 3: 'Garbanzo',
+      4: 'Coco', 5: 'Café', 6: 'Algodón', 7: 'Uva', 8: 'Yute',
+      9: 'Frijol rojo', 10: 'Lenteja', 11: 'Maíz', 12: 'Mango',
+      13: 'Frijol polilla', 14: 'Frijol mungo', 15: 'Melón',
+      16: 'Naranja', 17: 'Papaya', 18: 'Guandul', 19: 'Granada',
+      20: 'Arroz', 21: 'Sandía',
+    };
+
+    const CROP_ICONS = {
+      0: '🍎', 1: '🍌', 2: '🫘', 3: '🟡', 4: '🥥', 5: '☕', 6: '🌿', 7: '🍇',
+      8: '🌾', 9: '🔴', 10: '🟤', 11: '🌽', 12: '🥭', 13: '🫛', 14: '🟢',
+      15: '🍈', 16: '🍊', 17: '🍈', 18: '🫛', 19: '❤️', 20: '🍚', 21: '🍉',
+    };
+
+    const FEATURES = [
+      { id: 'N', label: 'Nitrógeno (N)', placeholder: '29' },
+      { id: 'P', label: 'Fósforo (P)', placeholder: '128' },
+      { id: 'K', label: 'Potasio (K)', placeholder: '198' },
+      { id: 'temperature', label: 'Temperatura °C', placeholder: '22.4' },
+      { id: 'humidity', label: 'Humedad %', placeholder: '92.7' },
+      { id: 'ph', label: 'pH del suelo', placeholder: '5.68' },
+      { id: 'rainfall', label: 'Lluvia mm', placeholder: '121.4' },
+    ];
+
+    const grid = document.getElementById('features-grid');
+    FEATURES.forEach((f, i) => {
+      grid.innerHTML += `
+        <div class="field">
+          <label for="${f.id}">${f.label}</label>
+          <input type="number" id="${f.id}" name="${f.id}"
+                 placeholder="${f.placeholder}" step="any" required />
+        </div>`;
+    });
+
+    const btnSvm = document.getElementById('btn-svm');
+    const btnRf = document.getElementById('btn-rf');
+    [btnSvm, btnRf].forEach(btn => {
+      btn.addEventListener('click', () => {
+        btnSvm.classList.toggle('active', btn === btnSvm);
+        btnRf.classList.toggle('active', btn === btnRf);
+      });
+    });
+
+    const predictBtn = document.getElementById('btn-predict');
+    const spinner = document.getElementById('spinner');
+    const btnLabel = document.getElementById('btn-label');
+    const resultPanel = document.getElementById('result-panel');
+    const resultClass = document.getElementById('result-class');
+    const resultMeta = document.getElementById('result-meta');
+    const resultBadge = document.getElementById('result-badge');
+    const confWrap = document.getElementById('conf-wrap');
+    const confFill = document.getElementById('conf-fill');
+    const confPct = document.getElementById('conf-pct');
+
+    predictBtn.addEventListener('click', async () => {
+      const features = FEATURES.map(f => {
+        const v = document.getElementById(f.id).value;
+        return v === '' ? null : parseFloat(v);
+      });
+
+      if (features.some(v => v === null || isNaN(v))) {
+        showError('Completa todos los campos antes de predecir.'); return;
+      }
+
+      const modelo = document.querySelector('input[name="model"]:checked').value;
+      setLoading(true);
+      resultPanel.style.display = 'none';
+
+      try {
+        const res = await fetch(`${API_URL}/predict`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ modelo, valores: features }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Error en el servidor');
+        showSuccess(data);
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    function setLoading(on) {
+      predictBtn.disabled = on;
+      spinner.style.display = on ? 'block' : 'none';
+      btnLabel.textContent = on ? 'Procesando...' : 'Analizar cultivo';
+    }
+
+    function showSuccess(data) {
+      resultPanel.className = 'success';
+      const label = CROP_LABELS[data.clase_predicha] ?? `Clase ${data.clase_predicha}`;
+      const icon = CROP_ICONS[data.clase_predicha] ?? '🌿';
+
+      resultClass.textContent = label;
+      resultBadge.textContent = icon;
+
+      const modelLabel = data.modelo === 'svm' ? 'SVM' : 'Random Forest';
+      resultMeta.innerHTML = `
+        <span class="meta-chip">Modelo: <strong>${modelLabel}</strong></span>`;
+
+      resultPanel.style.display = 'block';
+    }
+
+    function showError(msg) {
+      resultPanel.className = 'error';
+      resultClass.textContent = 'Error';
+      resultBadge.textContent = '⚠️';
+      resultMeta.innerHTML = `<span class="meta-chip">${msg}</span>`;
+      confWrap.style.display = 'none';
+      resultPanel.style.display = 'block';
+    }
+  </script>
+</body>
+
+</html>
