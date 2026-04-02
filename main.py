@@ -18,9 +18,10 @@ class RespuestaClasificacion(BaseModel):
 
 servicio = FastAPI(title="API Clasificador de Cosechas")
 
+# https://proyectoiot-backend.onrender.com
 servicio.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://proyectoiot-backend.onrender.com"],
+    allow_origins=["https://proyectoiot-moa5.onrender.com"],
     allow_methods=["POST", "GET"],
     allow_headers=["*"],
 )
